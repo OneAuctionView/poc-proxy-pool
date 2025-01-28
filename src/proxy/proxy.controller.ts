@@ -1,5 +1,7 @@
 import { Controller, Post, Get, Param, Body } from '@nestjs/common';
 import { ProxyService } from './proxy.service';
+import { Proxy } from './entities/proxy.entity';
+import { ProxyProvider } from './entities/proxy-provider.entity';
 
 @Controller('proxies')
 export class ProxyController {
@@ -46,7 +48,19 @@ export class ProxyController {
     return this.proxyService.assignProxyToProvider(proxyId, providerId);
   }
   @Get('/providers/:providerId')
-  async getProxiesByProvider(@Param('providerId') providerId: number) {
+  async getProxiesByProvider(
+    @Param('providerId') providerId: number,
+  ): Promise<Proxy[]> {
     return this.proxyService.getProxiesByProvider(providerId);
+  }
+
+  @Get('/providers')
+  async getAllProxyProviders(): Promise<ProxyProvider[]> {
+    return this.proxyService.getAllProxyProviders();
+  }
+
+  @Get()
+  getAllProxies(): Promise<Proxy[]> {
+    return this.proxyService.getAllProxies();
   }
 }

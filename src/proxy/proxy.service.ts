@@ -141,4 +141,12 @@ export class ProxyService {
 
     return providers[0].proxies;
   }
+
+  async getAllProxyProviders(): Promise<ProxyProvider[]> {
+    return this.providerRepository.find();
+  }
+
+  async getAllProxies(): Promise<Proxy[]> {
+    return this.proxyRepository.find();
+  }
 }
