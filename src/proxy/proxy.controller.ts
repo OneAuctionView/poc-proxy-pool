@@ -30,4 +30,23 @@ export class ProxyController {
   async getHealthyProxies(@Param('targetSiteId') targetSiteId: number) {
     return await this.proxyService.getHealthyProxiesForTargetSite(targetSiteId);
   }
+  // Add a new Proxy Provider
+  @Post('/providers')
+  async addProxyProvider(
+    @Body('name') name: string,
+    @Body('description') description?: string,
+  ) {
+    return this.proxyService.addProxyProvider(name, description);
+  }
+  @Post('/assign/:proxyId/:providerId')
+  async assignProxyToProvider(
+    @Param('proxyId') proxyId: number,
+    @Param('providerId') providerId: number,
+  ) {
+    return this.proxyService.assignProxyToProvider(proxyId, providerId);
+  }
+  @Get('/providers/:providerId')
+  async getProxiesByProvider(@Param('providerId') providerId: number) {
+    return this.proxyService.getProxiesByProvider(providerId);
+  }
 }
