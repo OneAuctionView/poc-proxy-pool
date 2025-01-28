@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Proxy } from './proxy.entity';
+import { Proxy } from './entities/proxy.entity';
+import { TargetSite } from './entities/target.entity';
+import { ProxyTargetStatus } from './entities/proxy-target-status.entity';
 import axios from 'axios';
 
 @Injectable()
@@ -9,6 +11,10 @@ export class ProxyService {
   constructor(
     @InjectRepository(Proxy)
     private readonly proxyRepository: Repository<Proxy>,
+    @InjectRepository(TargetSite)
+    private readonly targetRepository: Repository<TargetSite>,
+    @InjectRepository(ProxyTargetStatus)
+    private readonly statusRepository: Repository<ProxyTargetStatus>,
   ) {}
 
   async addProxy(proxyAddress: string): Promise<Proxy> {
@@ -16,15 +22,26 @@ export class ProxyService {
     return this.proxyRepository.save(proxy);
   }
 
-  async getHealthyProxy(): Promise<Proxy | null> {
-    return this.proxyRepository.findOne({ where: { status: 'healthy' } });
+  async addTargetSite(
+    name: string,
+    healthCheckUrl: string,
+  ): Promise<TargetSite> {
+    const targetSite = this.targetRepository.create({ name, healthCheckUrl });
+    return this.targetRepository.save(targetSite);
   }
 
-  async checkProxyHealth(proxyId: number): Promise<Proxy> {
-    const proxy = await this.proxyRepository.findOne({
-      where: { id: proxyId },
+  async checkProxyHealth(
+    proxyId: number,
+    targetSiteId: number,
+  ): Promise<ProxyTargetStatus> {
+    const proxy = await this.proxyRepository.findOneBy({ id: proxyId });
+    const targetSite = await this.targetRepository.findOneBy({
+      id: targetSiteId,
     });
-    if (!proxy) throw new Error('Proxy not found');
+
+    if (!proxy || !targetSite) {
+      throw new Error('Proxy or Target Site not found');
+    }
 
     const proxyConfig = {
       proxy: {
@@ -33,27 +50,58 @@ export class ProxyService {
       },
     };
 
+    let status = 'unhealthy';
+    let latency: number | null = null;
+
     try {
       const start = Date.now();
-      const response = await axios.get<{ status: string }>(
-        'https://httpbin.org/ip',
-        proxyConfig,
-      );
-      const latency = (Date.now() - start) / 1000;
-
-      proxy.status = response.status === 200 ? 'healthy' : 'unhealthy';
-      proxy.latency = latency;
-    } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        console.error('Axios error:', error.message);
-      } else {
-        console.error('Unexpected error:', error);
+      const response = await axios.get(targetSite.healthCheckUrl, proxyConfig);
+      latency = (Date.now() - start) / 1000;
+      if (response.status === 200) {
+        status = 'healthy';
       }
-      proxy.status = 'unhealthy';
-      proxy.latency = null;
+    } catch {
+      status = 'unhealthy';
     }
 
-    proxy.lastChecked = new Date();
-    return this.proxyRepository.save(proxy);
+    const proxyStatus = await this.statusRepository.findOne({
+      where: { proxy, targetSite },
+    });
+
+    if (proxyStatus) {
+      proxyStatus.status = status;
+      proxyStatus.latency = latency;
+      proxyStatus.lastChecked = new Date();
+      return this.statusRepository.save(proxyStatus);
+    }
+
+    const newStatus = this.statusRepository.create({
+      proxy,
+      targetSite,
+      status,
+      latency,
+      lastChecked: new Date(),
+    });
+
+    return this.statusRepository.save(newStatus);
+  }
+  async getHealthyProxiesForTargetSite(
+    targetSiteId: number,
+  ): Promise<ProxyTargetStatus[]> {
+    const targetSite = await this.targetRepository.findOneBy({
+      id: targetSiteId,
+    });
+
+    if (!targetSite) {
+      throw new Error('Target site not found');
+    }
+
+    return this.statusRepository.find({
+      where: {
+        targetSite,
+        status: 'healthy',
+      },
+      relations: ['proxy'], // Include the proxy details in the result
+    });
   }
 }

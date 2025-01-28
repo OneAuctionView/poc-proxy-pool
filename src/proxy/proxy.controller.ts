@@ -1,25 +1,33 @@
 import { Controller, Post, Get, Param, Body } from '@nestjs/common';
 import { ProxyService } from './proxy.service';
-import { Proxy } from './proxy.entity';
 
 @Controller('proxies')
 export class ProxyController {
   constructor(private readonly proxyService: ProxyService) {}
 
   @Post()
-  async addProxy(@Body('proxyAddress') proxyAddress: string): Promise<Proxy> {
+  async addProxy(@Body('proxyAddress') proxyAddress: string) {
     return this.proxyService.addProxy(proxyAddress);
   }
 
-  @Get('healthy')
-  async getHealthyProxy(): Promise<Proxy> {
-    const proxy = await this.proxyService.getHealthyProxy();
-    if (!proxy) throw new Error('No healthy proxies available');
-    return proxy;
+  @Post('/targets')
+  addTargetSite(
+    @Body('name') name: string,
+    @Body('healthCheckUrl') healthCheckUrl: string,
+  ) {
+    return this.proxyService.addTargetSite(name, healthCheckUrl);
   }
 
-  @Post('check/:id')
-  async checkProxyHealth(@Param('id') id: number): Promise<Proxy> {
-    return this.proxyService.checkProxyHealth(id);
+  @Post('/check/:proxyId/:targetSiteId')
+  async checkProxyHealth(
+    @Param('proxyId') proxyId: number,
+    @Param('targetSiteId') targetSiteId: number,
+  ) {
+    return this.proxyService.checkProxyHealth(proxyId, targetSiteId);
+  }
+
+  @Get('/healthy/:targetSiteId')
+  async getHealthyProxies(@Param('targetSiteId') targetSiteId: number) {
+    return await this.proxyService.getHealthyProxiesForTargetSite(targetSiteId);
   }
 }
